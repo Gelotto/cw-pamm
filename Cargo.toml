@@ -1,9 +1,9 @@
 [package]
-name = "cw-contract"
+name = "cw-pamm"
 version = "0.0.1"
 authors = []
 edition = "2021"
-description = "Smart Contract"
+description = "Multi-asset AMM Smart Contract for Parimutuel Betting Applications"
 license = "Apache-2.0"
 repository = ""
 homepage = ""
@@ -40,3 +40,4 @@ thiserror = { version = "1.0.56" }
 
 [dev-dependencies]
 cw-multi-test = { version = "0.20.0" }
+

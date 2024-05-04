@@ -1,7 +1,9 @@
 use crate::error::ContractError;
 use crate::execute::{exec_set_config, Context};
 use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
-use crate::query::{query_config, ReadonlyContext};
+use crate::query::config::query_config;
+use crate::query::pools::query_pools;
+use crate::query::ReadonlyContext;
 use crate::state;
 use cosmwasm_std::{entry_point, to_json_binary};
 use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response};
@@ -43,6 +45,7 @@ pub fn query(
     let ctx = ReadonlyContext { deps, env };
     let result = match msg {
         QueryMsg::Config {} => to_json_binary(&query_config(ctx)?),
+        QueryMsg::Pools {} => to_json_binary(&query_pools(ctx)?),
     }?;
     Ok(result)
 }
