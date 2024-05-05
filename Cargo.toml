@@ -1,9 +1,9 @@
 [package]
-name = "cw-pamm"
+name = "cw-parimutuel"
 version = "0.0.1"
 authors = []
 edition = "2021"
-description = "Multi-asset AMM Smart Contract for Parimutuel Betting Applications"
+description = "Smart Contract for Parimutuel Betting With PampIt Tokens"
 license = "Apache-2.0"
 repository = ""
 homepage = ""
@@ -37,6 +37,7 @@ cosmwasm-std = { version = "1.5.2" }
 schemars = "0.8.16"
 serde = { version = "1.0.196", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.56" }
+pamp = { path = "../pamp", version = "0.1.0"}
 
 [dev-dependencies]
 cw-multi-test = { version = "0.20.0" }

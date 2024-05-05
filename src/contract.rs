@@ -1,13 +1,16 @@
-use crate::error::ContractError;
-use crate::execute::{exec_set_config, Context};
+use crate::execute::buy::{exec_finalize_buy, exec_init_buy};
+use crate::execute::{Context, ReplyContext};
 use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use crate::query::config::query_config;
 use crate::query::pools::query_pools;
 use crate::query::ReadonlyContext;
 use crate::state;
-use cosmwasm_std::{entry_point, to_json_binary};
+use crate::state::models::SubMsgJob;
+use crate::state::storage::SUBMSG_JOBS;
+use cosmwasm_std::{entry_point, to_json_binary, Reply};
 use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response};
 use cw2::set_contract_version;
+use pamp::error::ContractError;
 
 const CONTRACT_NAME: &str = "crates.io:cw-contract-template";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -32,7 +35,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     let ctx = Context { deps, env, info };
     match msg {
-        ExecuteMsg::SetConfig(config) => exec_set_config(ctx, config),
+        ExecuteMsg::Buy(params) => exec_init_buy(ctx, params),
     }
 }
 
@@ -58,4 +61,17 @@ pub fn migrate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     Ok(Response::default())
+}
+
+#[entry_point]
+pub fn reply(
+    deps: DepsMut,
+    env: Env,
+    reply: Reply,
+) -> Result<Response, ContractError> {
+    let job = SUBMSG_JOBS.load(deps.storage, reply.id)?;
+    let ctx = ReplyContext { deps, env, reply };
+    match job {
+        SubMsgJob::Buy { pool, buyer } => exec_finalize_buy(ctx, pool, buyer),
+    }
 }
