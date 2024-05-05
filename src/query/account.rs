@@ -2,7 +2,7 @@ use cosmwasm_std::{Addr, Order};
 use pamp::error::ContractError;
 
 use crate::{
-    msg::{AccountResponse, PoolBalanceAppObject},
+    msg::{AccountResponse, PoolBalanceBizObject},
     state::storage::POOL_ACCOUNTS,
 };
 
@@ -13,7 +13,7 @@ pub fn query_account(
     address: Addr,
 ) -> Result<AccountResponse, ContractError> {
     let ReadonlyContext { deps, .. } = ctx;
-    let mut balances: Vec<PoolBalanceAppObject> = Vec::with_capacity(2);
+    let mut balances: Vec<PoolBalanceBizObject> = Vec::with_capacity(2);
 
     // Collect account's balances in each pool
     for result in POOL_ACCOUNTS
@@ -21,7 +21,7 @@ pub fn query_account(
         .range(deps.storage, None, None, Order::Ascending)
     {
         let (pool_id, pool_account) = result?;
-        balances.push(PoolBalanceAppObject {
+        balances.push(PoolBalanceBizObject {
             pool: pool_id,
             balance: pool_account.balance,
         })

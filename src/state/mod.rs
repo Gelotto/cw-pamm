@@ -2,12 +2,8 @@ pub mod models;
 pub mod storage;
 pub mod utils;
 
-use cosmwasm_std::{Addr, Response, Uint128};
-use pamp::{
-    error::ContractError,
-    market::{client::query_market_info, responses::MarketInfoResponse},
-    tokens::Token,
-};
+use cosmwasm_std::Response;
+use pamp::{error::ContractError, math::mul_u256};
 
 use crate::{
     execute::Context,
@@ -16,7 +12,7 @@ use crate::{
 
 use self::{
     models::{Pool, PoolInfo},
-    storage::{PoolId, POOLS, POOL_INFOS},
+    storage::{PoolId, N_ACCOUNTS, POOLS, POOL_INFOS, QUOTE_TOKEN},
 };
 
 /// Top-level initialization of contract state
@@ -25,30 +21,28 @@ pub fn init(
     msg: &InstantiateMsg,
 ) -> Result<Response, ContractError> {
     let Context { deps, .. } = ctx;
-    let InstantiateMsg { pools } = msg;
+    let InstantiateMsg { pools, quote_token } = msg;
+
+    QUOTE_TOKEN.save(deps.storage, &quote_token)?;
+    N_ACCOUNTS.save(deps.storage, &0)?;
 
     for (
         i,
         PoolInitArgs {
-            market,
             name,
             description,
+            image,
+            reserves,
         },
     ) in pools.iter().take(PoolId::MAX as usize).enumerate()
     {
         let pool_id: PoolId = i as PoolId;
-        let market_info = query_market_info(deps.querier, market)?;
         POOLS.save(
             deps.storage,
             pool_id,
             &Pool {
-                amount: Uint128::zero(),
-                market: market.to_owned(),
-                token: if market_info.token.cw20 {
-                    Token::Address(Addr::unchecked(market_info.token.denom.to_owned()))
-                } else {
-                    Token::Denom(market_info.token.denom.to_owned())
-                },
+                reserves: reserves.to_owned(),
+                k: mul_u256(reserves.base, reserves.quote)?,
             },
         )?;
         POOL_INFOS.save(
@@ -57,6 +51,7 @@ pub fn init(
             &PoolInfo {
                 description: description.to_owned(),
                 name: name.to_owned(),
+                image: image.to_owned(),
             },
         )?;
     }

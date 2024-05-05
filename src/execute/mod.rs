@@ -1,4 +1,6 @@
 pub mod buy;
+pub mod claim;
+pub mod swap;
 
 use cosmwasm_std::{DepsMut, Env, MessageInfo, Reply};
 

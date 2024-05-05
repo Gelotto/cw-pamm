@@ -1,13 +1,14 @@
-use crate::execute::buy::{exec_finalize_buy, exec_init_buy};
-use crate::execute::{Context, ReplyContext};
+use crate::execute::buy::exec_buy;
+use crate::execute::claim::exec_claim;
+use crate::execute::swap::exec_swap;
+use crate::execute::Context;
 use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use crate::query::account::query_account;
 use crate::query::config::query_config;
 use crate::query::pools::query_pools;
 use crate::query::ReadonlyContext;
 use crate::state;
-use crate::state::models::SubMsgJob;
-use crate::state::storage::SUBMSG_JOBS;
-use cosmwasm_std::{entry_point, to_json_binary, Reply};
+use cosmwasm_std::{entry_point, to_json_binary};
 use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response};
 use cw2::set_contract_version;
 use pamp::error::ContractError;
@@ -35,7 +36,9 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     let ctx = Context { deps, env, info };
     match msg {
-        ExecuteMsg::Buy(params) => exec_init_buy(ctx, params),
+        ExecuteMsg::Buy(params) => exec_buy(ctx, params),
+        ExecuteMsg::Swap(params) => exec_swap(ctx, params),
+        ExecuteMsg::Claim {} => exec_claim(ctx),
     }
 }
 
@@ -49,6 +52,7 @@ pub fn query(
     let result = match msg {
         QueryMsg::Config {} => to_json_binary(&query_config(ctx)?),
         QueryMsg::Pools {} => to_json_binary(&query_pools(ctx)?),
+        QueryMsg::Account { address } => to_json_binary(&query_account(ctx, address)?),
     }?;
     Ok(result)
 }
@@ -61,17 +65,4 @@ pub fn migrate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     Ok(Response::default())
-}
-
-#[entry_point]
-pub fn reply(
-    deps: DepsMut,
-    env: Env,
-    reply: Reply,
-) -> Result<Response, ContractError> {
-    let job = SUBMSG_JOBS.load(deps.storage, reply.id)?;
-    let ctx = ReplyContext { deps, env, reply };
-    match job {
-        SubMsgJob::Buy { pool, buyer } => exec_finalize_buy(ctx, pool, buyer),
-    }
 }

@@ -1,11 +1,11 @@
 use cosmwasm_std::{Order, StdResult};
-use pamp::{error::ContractError, market::client::query_market_info};
+use pamp::error::ContractError;
 
 use crate::{
-    msg::{PoolAppObject, PoolMarketInfo, PoolsResponse},
+    msg::{PoolBizObject, PoolsResponse},
     state::{
         models::{Pool, PoolInfo},
-        storage::{POOLS, POOL_INFOS},
+        storage::{PoolId, POOLS, POOL_INFOS},
     },
 };
 
@@ -13,33 +13,32 @@ use super::ReadonlyContext;
 
 pub fn query_pools(ctx: ReadonlyContext) -> Result<PoolsResponse, ContractError> {
     let ReadonlyContext { deps, .. } = ctx;
-    let mut pools: Vec<PoolAppObject> = Vec::with_capacity(2);
+    let mut pools: Vec<PoolBizObject> = Vec::with_capacity(2);
+
+    // TODO: get this by querying the associated jury contract!
+    let winning_pool_id: PoolId = 0;
+
     for result in POOLS
         .range(deps.storage, None, None, Order::Ascending)
         .collect::<Vec<StdResult<_>>>()
     {
-        let (
-            pool_id,
-            Pool {
-                market: market_addr,
-                amount,
-                token,
-            },
-        ) = result?;
+        let (pool_id, Pool { reserves, .. }) = result?;
 
-        let PoolInfo { name, description } = POOL_INFOS.load(deps.storage, pool_id)?;
-        let market_info = query_market_info(deps.querier, &market_addr)?;
-
-        pools.push(PoolAppObject {
+        let PoolInfo {
             name,
             description,
-            token,
-            amount,
-            market: PoolMarketInfo {
-                address: market_addr,
-                info: market_info,
-            },
+            image,
+        } = POOL_INFOS.load(deps.storage, pool_id)?;
+
+        pools.push(PoolBizObject {
+            id: pool_id,
+            winner: winning_pool_id == pool_id,
+            name,
+            description,
+            image,
+            reserves,
         });
     }
+
     Ok(PoolsResponse { pools })
 }
