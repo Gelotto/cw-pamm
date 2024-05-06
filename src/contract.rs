@@ -1,17 +1,17 @@
+use crate::error::ContractError;
 use crate::execute::buy::exec_buy;
 use crate::execute::claim::exec_claim;
 use crate::execute::swap::exec_swap;
 use crate::execute::Context;
 use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
-use crate::query::account::query_account;
 use crate::query::config::query_config;
-use crate::query::pools::query_pools;
+use crate::query::markets::query_markets;
+use crate::query::trader::query_trader;
 use crate::query::ReadonlyContext;
 use crate::state;
 use cosmwasm_std::{entry_point, to_json_binary};
 use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response};
 use cw2::set_contract_version;
-use pamp::error::ContractError;
 
 const CONTRACT_NAME: &str = "crates.io:cw-contract-template";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -51,8 +51,8 @@ pub fn query(
     let ctx = ReadonlyContext { deps, env };
     let result = match msg {
         QueryMsg::Config {} => to_json_binary(&query_config(ctx)?),
-        QueryMsg::Pools {} => to_json_binary(&query_pools(ctx)?),
-        QueryMsg::Account { address } => to_json_binary(&query_account(ctx, address)?),
+        QueryMsg::Markets {} => to_json_binary(&query_markets(ctx)?),
+        QueryMsg::Trader { address } => to_json_binary(&query_trader(ctx, address)?),
     }?;
     Ok(result)
 }

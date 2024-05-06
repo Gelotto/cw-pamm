@@ -1,19 +1,25 @@
-use crate::state::storage::{PoolId, HAS_CLAIMED, MARKET_CLOSE, POOLS, POOL_ACCOUNTS, QUOTE_TOKEN};
-use cosmwasm_std::{attr, Order, Response, Uint128};
-use pamp::{
-    error::ContractError,
-    math::{add_u128, mul_ratio_u128},
+use crate::state::storage::{
+    MarketId, AMOUNT_CLAIMED, HAS_CLAIMED, MARKETS, MARKET_ACCOUNTS, QUOTE_TOKEN, STOP_TIME,
+    TRADER_INFOS,
 };
+use crate::{
+    error::ContractError,
+    math::{add_u128, mul_ratio_u128, sub_u128},
+};
+use cosmwasm_std::{attr, Order, Response, Uint128};
 
 use super::Context;
 
 pub fn exec_claim(ctx: Context) -> Result<Response, ContractError> {
     let Context { deps, info, env } = ctx;
 
+    // TODO: get this by querying the associated jury contract!
+    let winning_pool_id: MarketId = 0;
+
     // Ensure that the market close time has been reached.
-    if env.block.time < MARKET_CLOSE.load(deps.storage)? {
+    if env.block.time <= STOP_TIME.load(deps.storage)? {
         return Err(ContractError::NotAuthorized {
-            reason: "the market is still actively trading".to_owned(),
+            msg: "the market is still actively trading".to_owned(),
         });
     }
 
@@ -25,38 +31,68 @@ pub fn exec_claim(ctx: Context) -> Result<Response, ContractError> {
             let has_claimed = maybe_has_claimed.unwrap_or(false);
             if has_claimed {
                 return Err(ContractError::NotAuthorized {
-                    reason: "already claimed".to_owned(),
+                    msg: "already claimed".to_owned(),
                 });
             }
             Ok(true)
         },
     )?;
 
-    // TODO: get this by querying the associated jury contract!
-    let winning_pool_id: PoolId = 0;
-
-    let mut pool_balance = Uint128::zero(); // base balance of winning pool
-    let mut net_winnings = Uint128::zero(); // total quote balance across all pools
+    // Ensure the user account has a non-zero balance in the winning market
+    let account = if let Some(account) =
+        MARKET_ACCOUNTS.may_load(deps.storage, (&info.sender, winning_pool_id))?
+    {
+        if account.balance.is_zero() {
+            return Err(ContractError::NotAuthorized {
+                msg: "nothing to claim".to_owned(),
+            });
+        }
+        account
+    } else {
+        return Err(ContractError::NotAuthorized {
+            msg: "nothing to claim".to_owned(),
+        });
+    };
 
     // Compute net_winnings and pool_balance.
-    for result in POOLS.range(deps.storage, None, None, Order::Ascending) {
-        let (pool_id, pool) = result?;
-        net_winnings = add_u128(net_winnings, pool.reserves.quote)?;
-        if pool_id == winning_pool_id {
-            pool_balance = pool.reserves.base;
+    let mut pool_balance = Uint128::zero(); // base balance of winning market
+    let mut net_winnings = Uint128::zero(); // total quote balance across all pools
+
+    for result in MARKETS.range(deps.storage, None, None, Order::Ascending) {
+        let (market_id, market) = result?;
+        net_winnings = add_u128(
+            net_winnings,
+            sub_u128(market.reserves.quote, market.offset)?,
+        )?;
+        if market_id == winning_pool_id {
+            pool_balance = sub_u128(market.supply, market.reserves.base)?;
         }
     }
 
     // Compute the account's claim amount.
     let quote_token = QUOTE_TOKEN.load(deps.storage)?;
-    let account = POOL_ACCOUNTS.load(deps.storage, (&info.sender, winning_pool_id))?;
     let claim_amount = mul_ratio_u128(net_winnings, account.balance, pool_balance)?;
 
-    if claim_amount.is_zero() {
-        return Err(ContractError::NotAuthorized {
-            reason: "nothing to claim".to_owned(),
-        });
-    }
+    // Increment the trader's running total amount claimed
+    TRADER_INFOS.update(
+        deps.storage,
+        &info.sender,
+        |maybe_info| -> Result<_, ContractError> {
+            if let Some(mut info) = maybe_info {
+                info.stats.amount_claimed = add_u128(info.stats.amount_claimed, claim_amount)?;
+                Ok(info)
+            } else {
+                Err(ContractError::NotAuthorized {
+                    msg: "No trader associated with sender".to_owned(),
+                })
+            }
+        },
+    )?;
+
+    // Increment global amount claimed
+    AMOUNT_CLAIMED.update(deps.storage, |n| -> Result<_, ContractError> {
+        add_u128(n, claim_amount)
+    })?;
 
     Ok(Response::new()
         .add_submessage(quote_token.transfer(&info.sender, claim_amount)?)

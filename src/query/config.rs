@@ -1,4 +1,4 @@
-use pamp::error::ContractError;
+use crate::error::ContractError;
 
 use crate::{msg::ConfigResponse, state::storage::CONFIG};
 

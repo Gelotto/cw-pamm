@@ -1,33 +1,35 @@
-use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Storage, Uint128, Uint256};
-use pamp::{
+use crate::{
     error::ContractError,
     math::{add_u128, add_u32, div_u256, sub_u128},
 };
+use cosmwasm_schema::cw_serde;
+use cosmwasm_std::{Addr, Storage, Uint128, Uint256};
 
-use super::storage::{PoolId, N_ACCOUNTS, POOLS, POOL_ACCOUNTS};
+use super::storage::{MarketId, MARKETS, MARKET_ACCOUNTS};
 
 #[cw_serde]
 pub struct Config {}
 
 #[cw_serde]
-pub struct PoolReserves {
+pub struct MarketReserves {
     pub base: Uint128,
     pub quote: Uint128,
 }
 
 #[cw_serde]
-pub struct Pool {
-    pub reserves: PoolReserves,
+pub struct Market {
+    pub reserves: MarketReserves,
+    pub offset: Uint128,
+    pub supply: Uint128,
     pub k: Uint256,
 }
 
-impl Pool {
+impl Market {
     pub fn load(
         store: &dyn Storage,
-        id: PoolId,
+        id: MarketId,
     ) -> Result<Self, ContractError> {
-        Ok(POOLS.load(store, id)?)
+        Ok(MARKETS.load(store, id)?)
     }
 
     pub fn buy(
@@ -67,29 +69,50 @@ impl Pool {
 }
 
 #[cw_serde]
-pub struct PoolInfo {
+pub struct MarketInfo {
+    pub symbol: String,
     pub name: String,
     pub description: Option<String>,
     pub image: Option<String>,
 }
 
 #[cw_serde]
-pub struct PoolAccount {
+pub struct GlobalStats {
+    pub amount_claimed: Uint128,
+    pub num_traders: u32,
+}
+
+#[cw_serde]
+pub struct TraderStats {
+    pub amount_claimed: Uint128,
+    pub quote_amount_in: Uint128,
+    pub quote_amount_out: Uint128,
+    pub num_buys: u32,
+    pub num_sells: u32,
+}
+
+#[cw_serde]
+pub struct TraderInfo {
+    pub stats: TraderStats,
+}
+
+#[cw_serde]
+pub struct MarketAccount {
     pub balance: Uint128,
 }
 
-impl PoolAccount {
+impl MarketAccount {
     pub fn upsert(
         store: &mut dyn Storage,
         owner: &Addr,
-        pool_id: PoolId,
+        market_id: MarketId,
         balance_delta: Uint128,
         is_positive_delta: bool,
     ) -> Result<Self, ContractError> {
-        // Create or insert PoolAccount
-        let account = POOL_ACCOUNTS.update(
+        // Create or insert MarketAccount
+        let account = MARKET_ACCOUNTS.update(
             store,
-            (owner, pool_id),
+            (owner, market_id),
             |maybe_account| -> Result<_, ContractError> {
                 if let Some(mut account) = maybe_account {
                     account.balance = (if is_positive_delta {

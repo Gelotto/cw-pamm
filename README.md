@@ -1,62 +1,29 @@
-# CosmWasm Project
+# cw-pamm
+A CosmWasm smart contract for parimutuel betting pools in which each pool is an
+AMM and sells ownership shares directly from its bonding curve.
 
-## Project Structure
+## Multi-AMM
+PAMM stands for Parimutuel AMM. Each smart contract represents an
+interoperable group of two or more traditional AMMs. Each AMM creates a its
+own token and initializes it to a non-zero quote price. Users can then 
+buy tokens directly from each market's bonding curve. 
 
-Contract are partitioned into _query_ and _execute_ functions. _Query_ functions
-read contract state; whereas, _execute_ functions may mutate state. These groups
-of functions are contained in distinct modules: `src/execute/` and `src/query/`.
-If the contract implements any other entrypoint, like `reply`, one can create a
-new `reply` module following the established pattern.
+Once a user has bought tokens using the configured quote token (most likely, the
+blockchain's native coin), they may directly swap their tokens in one AMM for
+tokens in another within same the group (within the smart contract).
 
-## Building, Deploying, Instantiating
+## Parimutuel Betting 
+When developer-defined conditions are met, trading closes, and the markets are
+considered resolved. Upon resolution, one AMM is designated the winner. Any
+account with a positive balance in the winning market may claim their share of
+the smart contract's quote token balance, representing the net buy-in across all
+markets and traders. The size of ther claim is proportional to the size of their
+buy-in relative to all others.
 
-```
-make build
-make schemas
-make deploy
-make instantiate
-```
+## Fees
+There are multiple places where fees come into play. Each is separately configurable.
 
----
-
-## Local Development
-
-### A. Docker Setup
-1. Run local Juno node
-```
-make devnet
-```
-
-### B. Local System Setup
-
-1. Initialize Juno & Import key again
-```
-junod init --chain-id testing localdev
-```
-
-2. Import key
-```
-junod keys add JunoWallet --recover
-
-> Enter your bip39 mnemonic
-clip hire initial neck maid actor venue client foam budget lock catalog sweet steak waste crater broccoli pipe steak sister coyote moment obvious choose
-```
-
-Edit `$HOME/.juno/config/client.toml` and set `keyring-backend = "test"` to match the Juno node running in Docker.
-
-### OSX Notes
-* `grep` - Need to run `brew install grep`. Follow post-install instructions to add new location to PATH
-
----
-
-## Execute Functions
-
-### Change Ownership
-
-This lets you change the "owner" address associated with the contract.
-
-## Query Functions
-
-### Select
-
-Return one or more specified properties from state.
+- Buy fee - applied when quote token is swapped into an AMM.
+- Sell fee - applied when quote token is swapped out the AMM.
+- Swap fee - applied when tokens from one AMM are swapped with another.
+- Claim fee - applied when quote token winnings are claimed
