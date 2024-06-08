@@ -1,11 +1,12 @@
 use crate::error::ContractError;
 use crate::execute::buy::exec_buy;
 use crate::execute::claim::exec_claim;
+use crate::execute::sell::exec_sell;
 use crate::execute::swap::exec_swap;
 use crate::execute::Context;
 use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use crate::query::config::query_config;
-use crate::query::markets::query_markets;
+use crate::query::pools::query_pools;
 use crate::query::trader::query_trader;
 use crate::query::ReadonlyContext;
 use crate::state;
@@ -37,6 +38,7 @@ pub fn execute(
     let ctx = Context { deps, env, info };
     match msg {
         ExecuteMsg::Buy(params) => exec_buy(ctx, params),
+        ExecuteMsg::Sell(params) => exec_sell(ctx, params),
         ExecuteMsg::Swap(params) => exec_swap(ctx, params),
         ExecuteMsg::Claim {} => exec_claim(ctx),
     }
@@ -51,7 +53,7 @@ pub fn query(
     let ctx = ReadonlyContext { deps, env };
     let result = match msg {
         QueryMsg::Config {} => to_json_binary(&query_config(ctx)?),
-        QueryMsg::Markets {} => to_json_binary(&query_markets(ctx)?),
+        QueryMsg::Pools {} => to_json_binary(&query_pools(ctx)?),
         QueryMsg::Trader { address } => to_json_binary(&query_trader(ctx, address)?),
     }?;
     Ok(result)

@@ -1,5 +1,5 @@
 pub mod config;
-pub mod markets;
+pub mod pools;
 pub mod trader;
 
 use cosmwasm_std::{Deps, Env};

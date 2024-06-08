@@ -1,6 +1,5 @@
 use crate::state::storage::{
-    MarketId, AMOUNT_CLAIMED, HAS_CLAIMED, MARKETS, MARKET_ACCOUNTS, QUOTE_TOKEN, STOP_TIME,
-    TRADER_INFOS,
+    PoolId, AMOUNT_CLAIMED, HAS_CLAIMED, POOLS, POOL_ACCOUNTS, QUOTE_TOKEN, STOP_TIME, TRADER_INFOS,
 };
 use crate::{
     error::ContractError,
@@ -14,12 +13,12 @@ pub fn exec_claim(ctx: Context) -> Result<Response, ContractError> {
     let Context { deps, info, env } = ctx;
 
     // TODO: get this by querying the associated jury contract!
-    let winning_pool_id: MarketId = 0;
+    let winning_pool_id: PoolId = 0;
 
-    // Ensure that the market close time has been reached.
+    // Ensure that the pool close time has been reached.
     if env.block.time <= STOP_TIME.load(deps.storage)? {
         return Err(ContractError::NotAuthorized {
-            msg: "the market is still actively trading".to_owned(),
+            msg: "the pool is still actively trading".to_owned(),
         });
     }
 
@@ -38,9 +37,9 @@ pub fn exec_claim(ctx: Context) -> Result<Response, ContractError> {
         },
     )?;
 
-    // Ensure the user account has a non-zero balance in the winning market
+    // Ensure the user account has a non-zero balance in the winning pool
     let account = if let Some(account) =
-        MARKET_ACCOUNTS.may_load(deps.storage, (&info.sender, winning_pool_id))?
+        POOL_ACCOUNTS.may_load(deps.storage, (&info.sender, winning_pool_id))?
     {
         if account.balance.is_zero() {
             return Err(ContractError::NotAuthorized {
@@ -55,17 +54,14 @@ pub fn exec_claim(ctx: Context) -> Result<Response, ContractError> {
     };
 
     // Compute net_winnings and pool_balance.
-    let mut pool_balance = Uint128::zero(); // base balance of winning market
+    let mut pool_balance = Uint128::zero(); // base balance of winning pool
     let mut net_winnings = Uint128::zero(); // total quote balance across all pools
 
-    for result in MARKETS.range(deps.storage, None, None, Order::Ascending) {
-        let (market_id, market) = result?;
-        net_winnings = add_u128(
-            net_winnings,
-            sub_u128(market.reserves.quote, market.offset)?,
-        )?;
-        if market_id == winning_pool_id {
-            pool_balance = sub_u128(market.supply, market.reserves.base)?;
+    for result in POOLS.range(deps.storage, None, None, Order::Ascending) {
+        let (pool_id, pool) = result?;
+        net_winnings = add_u128(net_winnings, sub_u128(pool.reserves.quote, pool.offset)?)?;
+        if pool_id == winning_pool_id {
+            pool_balance = sub_u128(pool.supply, pool.reserves.base)?;
         }
     }
 

@@ -5,7 +5,7 @@ use crate::{
     msg::{PoolBalance, TraderResponse},
     state::{
         models::TraderInfo,
-        storage::{MARKET_ACCOUNTS, TRADER_INFOS},
+        storage::{POOL_ACCOUNTS, TRADER_INFOS},
     },
 };
 
@@ -19,16 +19,16 @@ pub fn query_trader(
 
     let TraderInfo { stats } = TRADER_INFOS.load(deps.storage, &address)?;
 
-    // Collect account's balances in each market
+    // Collect account's balances in each pool
     let mut balances: Vec<PoolBalance> = Vec::with_capacity(2);
 
-    for result in MARKET_ACCOUNTS
+    for result in POOL_ACCOUNTS
         .prefix(&address)
         .range(deps.storage, None, None, Order::Ascending)
     {
-        let (market_id, pool_account) = result?;
+        let (pool_id, pool_account) = result?;
         balances.push(PoolBalance {
-            market: market_id,
+            pool: pool_id,
             amount: pool_account.balance,
         })
     }

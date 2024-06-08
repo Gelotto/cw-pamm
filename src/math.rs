@@ -94,6 +94,15 @@ pub fn mul_ratio_u128<A: Into<Uint128>, B: Into<Uint128>, C: Into<Uint128>>(
         .map_err(|e| ContractError::Std(StdError::generic_err(e.to_string())))
 }
 
+pub fn mul_pct_u128<A: Into<Uint128>, B: Into<Uint128>>(
+    base: A,
+    numerator: B,
+) -> Result<Uint128, ContractError> {
+    let a: Uint128 = base.into();
+    let b: Uint128 = numerator.into();
+    mul_ratio_u128(a, b, 1_000_000u128)
+}
+
 pub fn add_u64<A: Into<Uint64>, B: Into<Uint64>>(
     a: A,
     b: B,

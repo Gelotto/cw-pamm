@@ -1,14 +1,11 @@
 use crate::{
     error::ContractError,
-    math::{add_u128, add_u32, mul_ratio_u128, sub_u128},
-    token::Token,
-};
-use crate::{
-    msg::BuyParams,
+    math::{add_u128, add_u256, add_u32, mul_pct_u128, sub_u128},
+    msg::{BuyParams, PoolAmount},
     state::{
-        models::{Market, MarketAccount, TraderInfo, TraderStats},
+        models::{Pool, PoolAccount, TraderInfo, TraderStats},
         storage::{
-            BUY_FEE_PCT, FEE_MANAGER_ADDR, GLOBAL_STATS, MARKETS, MARKET_STATS, QUOTE_TOKEN,
+            BUY_FEE_PCT, FEE_MANAGER_ADDR, MARKET_STATS, POOLS, POOL_STATS, QUOTE_TOKEN,
             TRADER_INFOS,
         },
     },
@@ -22,60 +19,99 @@ pub fn exec_buy(
     params: BuyParams,
 ) -> Result<Response, ContractError> {
     let Context { deps, info, .. } = ctx;
-    let BuyParams { market: market_id } = params;
+    let BuyParams { amounts } = params;
     let quote_token = QUOTE_TOKEN.load(deps.storage)?;
+    let fee_pct = BUY_FEE_PCT.load(deps.storage)?;
+    let buyer = info.sender;
+
+    // Total quote amount swapping in
+    let total_in_amount: Uint128 = amounts
+        .iter()
+        .map(|a| a.amount)
+        .reduce(|a, b| add_u128(a, b).unwrap_or_default())
+        .unwrap_or_default();
+
+    if total_in_amount.is_zero() {
+        return Err(ContractError::ValidationError {
+            msg: "cannot buy 0 amount".to_owned(),
+        });
+    }
+
+    if !quote_token.has_in_funds(&info.funds, Some(total_in_amount)) {
+        return Err(ContractError::InsufficientFunds {
+            msg: "insufficient funds".to_owned(),
+        });
+    }
+
     let mut resp = Response::new().add_attribute("action", "buy");
-    let mut market = Market::load(deps.storage, market_id)?;
-    let mut in_amount = [Uint128::zero()];
+    let mut total_fee_amount = Uint128::zero();
+    let mut total_in_amount = Uint128::zero();
+    let mut total_out_amount = Uint128::zero();
 
-    if let Token::Denom(denom) = &quote_token {
-        if let Some(Coin { amount, .. }) = info.funds.iter().find(|c| c.denom == *denom) {
-            in_amount[0] = *amount;
+    for PoolAmount { pool_id, amount } in amounts.iter() {
+        let pool_id = *pool_id;
+        let amount = *amount;
 
-            let fee_amount =
-                mul_ratio_u128(*amount, BUY_FEE_PCT.load(deps.storage)?, 1_000_000u128)?;
+        let mut pool = Pool::load(deps.storage, pool_id)?;
+        let fee_amount = mul_pct_u128(amount, fee_pct)?;
+        let in_amount_post_fee = sub_u128(amount, fee_amount)?;
 
-            let in_amount_post_fee = sub_u128(*amount, fee_amount)?;
+        // Swap in quote token
+        let out_amount = pool.buy(in_amount_post_fee)?;
 
-            let out_amount = market.buy(in_amount_post_fee)?;
+        // Update or create sender's account for specifically this pool
+        let account = PoolAccount::upsert(deps.storage, &buyer, pool_id, out_amount, true)?;
 
-            let account =
-                MarketAccount::upsert(deps.storage, &info.sender, market_id, out_amount, true)?;
+        // Agg running totals
+        total_fee_amount = add_u128(total_fee_amount, fee_amount)?;
+        total_in_amount = add_u128(total_in_amount, in_amount_post_fee)?;
+        total_out_amount = add_u128(total_out_amount, out_amount)?;
 
-            resp = resp
-                .add_submessage(
-                    quote_token.transfer(&FEE_MANAGER_ADDR.load(deps.storage)?, fee_amount)?,
-                )
-                .add_attributes(vec![
-                    attr("account_balance", account.balance.u128().to_string()),
-                    attr("in_amount", in_amount_post_fee.u128().to_string()),
-                    attr("market_id", market_id.to_string()),
-                    attr("out_amount", out_amount.u128().to_string()),
-                    attr("fee_amount", fee_amount.u128().to_string()),
-                ]);
-        } else {
-            return Err(ContractError::InsufficientFunds { msg: "".to_owned() });
-        }
-    } else {
-        return Err(ContractError::NotAuthorized { msg: "".to_owned() });
+        POOLS.save(deps.storage, pool_id, &pool)?;
+
+        // Update statistics pertaining specifically to this pool
+        POOL_STATS.update(
+            deps.storage,
+            pool_id,
+            |maybe_stats| -> Result<_, ContractError> {
+                if let Some(mut stats) = maybe_stats {
+                    stats.quote_amount_in = add_u256(stats.quote_amount_in, in_amount_post_fee)?;
+                    stats.base_amount_out = add_u256(stats.base_amount_out, out_amount)?;
+                    stats.num_buys = add_u32(stats.num_buys, 1)?;
+                    if account.balance == out_amount {
+                        stats.num_traders = add_u32(stats.num_traders, 1)?;
+                    }
+                    Ok(stats)
+                } else {
+                    return Err(ContractError::NotAuthorized {
+                        msg: format!("could not load stats for pool {}", pool_id),
+                    });
+                }
+            },
+        )?;
+
+        // Add submsg to transfer fee to fee manager account
+        resp = resp.add_submessage(
+            quote_token.transfer(&FEE_MANAGER_ADDR.load(deps.storage)?, fee_amount)?,
+        )
     }
 
     // Upsert a TraderInfo for tx sender
     let trader = TRADER_INFOS.update(
         deps.storage,
-        &info.sender,
+        &buyer,
         |maybe_trader_info| -> Result<_, ContractError> {
             if let Some(mut trader_info) = maybe_trader_info {
                 trader_info.stats.num_buys = add_u32(trader_info.stats.num_buys, 1)?;
                 trader_info.stats.quote_amount_in =
-                    add_u128(trader_info.stats.quote_amount_in, in_amount[0])?;
+                    add_u128(trader_info.stats.quote_amount_in, total_in_amount)?;
                 Ok(trader_info)
             } else {
                 Ok(TraderInfo {
                     stats: TraderStats {
                         amount_claimed: Uint128::zero(),
                         quote_amount_out: Uint128::zero(),
-                        quote_amount_in: in_amount[0],
+                        quote_amount_in: total_in_amount,
                         num_sells: 0,
                         num_buys: 1,
                     },
@@ -86,32 +122,15 @@ pub fn exec_buy(
 
     // Increment global trader count if this is a new account
     if trader.stats.num_buys == 1 {
-        GLOBAL_STATS.update(deps.storage, |mut stats| -> Result<_, ContractError> {
+        MARKET_STATS.update(deps.storage, |mut stats| -> Result<_, ContractError> {
             stats.num_traders = add_u32(stats.num_traders, 1)?;
             Ok(stats)
         })?;
     }
 
-    MARKET_STATS.update(
-        deps.storage,
-        market_id,
-        |maybe_stats| -> Result<_, ContractError> {
-            if let Some(mut stats) = maybe_stats {
-                stats.quote_amount_in = add_u128(stats.quote_amount_in, in_amount[0])?;
-                stats.num_buys = add_u32(stats.num_buys, 1)?;
-                if trader.stats.num_buys == 1 {
-                    stats.num_traders = add_u32(stats.num_traders, 1)?;
-                }
-                Ok(stats)
-            } else {
-                return Err(ContractError::NotAuthorized {
-                    msg: format!("could not load stats for market {}", market_id),
-                });
-            }
-        },
-    )?;
-
-    MARKETS.save(deps.storage, market_id, &market)?;
-
-    Ok(resp)
+    Ok(resp.add_attributes(vec![
+        attr("fee_amount", total_fee_amount.u128().to_string()),
+        attr("in_amount", total_in_amount.u128().to_string()),
+        attr("out_amount", total_out_amount.u128().to_string()),
+    ]))
 }

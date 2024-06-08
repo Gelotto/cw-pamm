@@ -3,18 +3,19 @@ pub mod storage;
 pub mod utils;
 
 use crate::{error::ContractError, math::mul_u256};
-use cosmwasm_std::{Response, Uint128};
+use cosmwasm_std::{Response, Uint128, Uint256};
+use storage::SELL_FEE_PCT;
 
 use crate::{
     execute::Context,
-    msg::{InstantiateMsg, MarketStats, PoolInitArgs},
+    msg::{InstantiateMsg, PoolInitArgs, PoolStats},
 };
 
 use self::{
-    models::{GlobalStats, Market, MarketInfo},
+    models::{GlobalStats, Pool, PoolInfo},
     storage::{
-        MarketId, AMOUNT_CLAIMED, BUY_FEE_PCT, FEE_MANAGER_ADDR, GLOBAL_STATS, MARKETS,
-        MARKET_INFOS, MARKET_STATS, QUOTE_TOKEN, START_TIME, STOP_TIME, SWAP_FEE_PCT,
+        PoolId, AMOUNT_CLAIMED, BUY_FEE_PCT, FEE_MANAGER_ADDR, MARKET_STATS, POOLS, POOL_INFOS,
+        POOL_STATS, QUOTE_TOKEN, START_TIME, STOP_TIME, SWAP_FEE_PCT,
     },
 };
 
@@ -35,11 +36,12 @@ pub fn init(
     AMOUNT_CLAIMED.save(deps.storage, &Uint128::zero())?;
     QUOTE_TOKEN.save(deps.storage, quote)?;
     BUY_FEE_PCT.save(deps.storage, &fees.pct_buy)?;
+    SELL_FEE_PCT.save(deps.storage, &fees.pct_sell)?;
     SWAP_FEE_PCT.save(deps.storage, &fees.pct_swap)?;
     START_TIME.save(deps.storage, &t_open.clone().unwrap_or(env.block.time))?;
     STOP_TIME.save(deps.storage, t_close)?;
 
-    GLOBAL_STATS.save(
+    MARKET_STATS.save(
         deps.storage,
         &GlobalStats {
             amount_claimed: Uint128::zero(),
@@ -62,33 +64,39 @@ pub fn init(
             image,
             reserves,
         },
-    ) in pools.iter().take(MarketId::MAX as usize).enumerate()
+    ) in pools.iter().take(PoolId::MAX as usize).enumerate()
     {
-        let market_id: MarketId = i as MarketId;
-        MARKETS.save(
+        let pool_id: PoolId = i as PoolId;
+
+        POOLS.save(
             deps.storage,
-            market_id,
-            &Market {
+            pool_id,
+            &Pool {
                 reserves: reserves.to_owned(),
                 offset: reserves.quote,
                 supply: reserves.base,
                 k: mul_u256(reserves.base, reserves.quote)?,
             },
         )?;
-        MARKET_STATS.save(
+
+        POOL_STATS.save(
             deps.storage,
-            market_id,
-            &MarketStats {
-                quote_amount_in: Uint128::zero(),
-                quote_amount_out: Uint128::zero(),
+            pool_id,
+            &PoolStats {
+                quote_amount_in: Uint256::zero(),
+                quote_amount_out: Uint256::zero(),
+                base_amount_in: Uint256::zero(),
+                base_amount_out: Uint256::zero(),
                 num_traders: 0,
                 num_buys: 0,
+                num_sells: 0,
             },
         )?;
-        MARKET_INFOS.save(
+
+        POOL_INFOS.save(
             deps.storage,
-            market_id,
-            &MarketInfo {
+            pool_id,
+            &PoolInfo {
                 description: description.to_owned(),
                 symbol: symbol.to_owned(),
                 name: name.to_owned(),

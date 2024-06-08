@@ -1,35 +1,36 @@
 use crate::{
     error::ContractError,
-    math::{add_u128, add_u32, div_u256, sub_u128},
+    math::{add_u128, div_u256, sub_u128},
+    token::Token,
 };
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Storage, Uint128, Uint256};
 
-use super::storage::{MarketId, MARKETS, MARKET_ACCOUNTS};
+use super::storage::{PoolId, POOLS, POOL_ACCOUNTS};
 
 #[cw_serde]
 pub struct Config {}
 
 #[cw_serde]
-pub struct MarketReserves {
+pub struct PoolReserves {
     pub base: Uint128,
     pub quote: Uint128,
 }
 
 #[cw_serde]
-pub struct Market {
-    pub reserves: MarketReserves,
+pub struct Pool {
+    pub reserves: PoolReserves,
     pub offset: Uint128,
     pub supply: Uint128,
     pub k: Uint256,
 }
 
-impl Market {
+impl Pool {
     pub fn load(
         store: &dyn Storage,
-        id: MarketId,
+        id: PoolId,
     ) -> Result<Self, ContractError> {
-        Ok(MARKETS.load(store, id)?)
+        Ok(POOLS.load(store, id)?)
     }
 
     pub fn buy(
@@ -69,7 +70,7 @@ impl Market {
 }
 
 #[cw_serde]
-pub struct MarketInfo {
+pub struct PoolInfo {
     pub symbol: String,
     pub name: String,
     pub description: Option<String>,
@@ -97,22 +98,22 @@ pub struct TraderInfo {
 }
 
 #[cw_serde]
-pub struct MarketAccount {
+pub struct PoolAccount {
     pub balance: Uint128,
 }
 
-impl MarketAccount {
+impl PoolAccount {
     pub fn upsert(
         store: &mut dyn Storage,
         owner: &Addr,
-        market_id: MarketId,
+        pool_id: PoolId,
         balance_delta: Uint128,
         is_positive_delta: bool,
     ) -> Result<Self, ContractError> {
-        // Create or insert MarketAccount
-        let account = MARKET_ACCOUNTS.update(
+        // Create or insert PoolAccount
+        let account = POOL_ACCOUNTS.update(
             store,
-            (owner, market_id),
+            (owner, pool_id),
             |maybe_account| -> Result<_, ContractError> {
                 if let Some(mut account) = maybe_account {
                     account.balance = (if is_positive_delta {
