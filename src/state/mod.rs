@@ -4,7 +4,7 @@ pub mod utils;
 
 use crate::{error::ContractError, math::mul_u256};
 use cosmwasm_std::{Response, Uint128, Uint256};
-use storage::SELL_FEE_PCT;
+use storage::{QUOTE_DECIMALS, QUOTE_SYMBOL, SELL_FEE_PCT};
 
 use crate::{
     execute::Context,
@@ -12,7 +12,7 @@ use crate::{
 };
 
 use self::{
-    models::{GlobalStats, Pool, PoolInfo},
+    models::{MarketStats, Pool, PoolInfo},
     storage::{
         PoolId, AMOUNT_CLAIMED, BUY_FEE_PCT, FEE_MANAGER_ADDR, MARKET_STATS, POOLS, POOL_INFOS,
         POOL_STATS, QUOTE_TOKEN, START_TIME, STOP_TIME, SWAP_FEE_PCT,
@@ -24,26 +24,30 @@ pub fn init(
     ctx: Context,
     msg: &InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let Context { deps, info, env } = ctx;
+    let Context { deps, info, .. } = ctx;
     let InstantiateMsg {
-        t_open,
-        t_close,
+        start,
+        stop,
         pools,
-        quote,
+        quote_token,
+        quote_decimals,
+        quote_symbol,
         fees,
     } = msg;
 
     AMOUNT_CLAIMED.save(deps.storage, &Uint128::zero())?;
-    QUOTE_TOKEN.save(deps.storage, quote)?;
+    QUOTE_TOKEN.save(deps.storage, quote_token)?;
+    QUOTE_DECIMALS.save(deps.storage, quote_decimals)?;
+    QUOTE_SYMBOL.save(deps.storage, quote_symbol)?;
     BUY_FEE_PCT.save(deps.storage, &fees.pct_buy)?;
     SELL_FEE_PCT.save(deps.storage, &fees.pct_sell)?;
     SWAP_FEE_PCT.save(deps.storage, &fees.pct_swap)?;
-    START_TIME.save(deps.storage, &t_open.clone().unwrap_or(env.block.time))?;
-    STOP_TIME.save(deps.storage, t_close)?;
+    START_TIME.save(deps.storage, &start)?;
+    STOP_TIME.save(deps.storage, stop)?;
 
     MARKET_STATS.save(
         deps.storage,
-        &GlobalStats {
+        &MarketStats {
             amount_claimed: Uint128::zero(),
             num_traders: 0,
         },
@@ -83,6 +87,7 @@ pub fn init(
             deps.storage,
             pool_id,
             &PoolStats {
+                fees_collected: Uint128::zero(),
                 quote_amount_in: Uint256::zero(),
                 quote_amount_out: Uint256::zero(),
                 base_amount_in: Uint256::zero(),

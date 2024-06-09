@@ -1,10 +1,10 @@
 use crate::{
     error::ContractError,
-    math::{add_u256, add_u32, mul_ratio_u128, sub_u128},
+    math::{add_u128, add_u256, add_u32, mul_ratio_u128, sub_u128},
     msg::SwapStats,
     state::{
         models::OhlcBar,
-        storage::{QUOTE_DECIMALS, SWAP_STATS},
+        storage::{POOL_STATS, QUOTE_DECIMALS, SWAP_STATS},
     },
 };
 use crate::{
@@ -49,6 +49,16 @@ pub fn exec_swap(
 
     POOLS.save(deps.storage, from_pool_id, &from_pool)?;
     POOLS.save(deps.storage, to_pool_id, &to_pool)?;
+
+    POOL_STATS.update(
+        deps.storage,
+        from_pool_id,
+        |stats| -> Result<_, ContractError> {
+            let mut stats = stats.unwrap();
+            stats.fees_collected = add_u128(stats.fees_collected, fee_amount)?;
+            Ok(stats)
+        },
+    )?;
 
     SWAP_STATS.update(
         deps.storage,

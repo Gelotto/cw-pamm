@@ -80,6 +80,7 @@ pub fn exec_buy(
                 if let Some(mut stats) = maybe_stats {
                     stats.quote_amount_in = add_u256(stats.quote_amount_in, in_amount_post_fee)?;
                     stats.base_amount_out = add_u256(stats.base_amount_out, out_amount)?;
+                    stats.fees_collected = add_u128(stats.fees_collected, fee_amount)?;
                     stats.num_buys = add_u32(stats.num_buys, 1)?;
                     if account.balance == out_amount {
                         stats.num_traders = add_u32(stats.num_traders, 1)?;

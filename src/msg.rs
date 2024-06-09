@@ -3,7 +3,7 @@ use cosmwasm_std::{Addr, Timestamp, Uint128, Uint256};
 
 use crate::{
     state::{
-        models::{Config, GlobalStats, PoolReserves, TraderStats},
+        models::{Config, MarketStats, PoolReserves, TraderStats},
         storage::PoolId,
     },
     token::Token,
@@ -28,9 +28,11 @@ pub struct FeeInitArgs {
 
 #[cw_serde]
 pub struct InstantiateMsg {
-    pub t_open: Option<Timestamp>,
-    pub t_close: Timestamp,
-    pub quote: Token,
+    pub start: Timestamp,
+    pub stop: Timestamp,
+    pub quote_token: Token,
+    pub quote_decimals: u8,
+    pub quote_symbol: String,
     pub pools: Vec<PoolInitArgs>,
     pub fees: FeeInitArgs,
 }
@@ -94,6 +96,7 @@ pub struct PoolStats {
     pub quote_amount_out: Uint256,
     pub base_amount_in: Uint256,
     pub base_amount_out: Uint256,
+    pub fees_collected: Uint128,
 }
 
 #[cw_serde]
@@ -120,7 +123,7 @@ pub struct PoolBizObject {
 #[cw_serde]
 pub struct PoolsResponse {
     pub pools: Vec<PoolBizObject>,
-    pub stats: GlobalStats,
+    pub stats: MarketStats,
 }
 
 #[cw_serde]

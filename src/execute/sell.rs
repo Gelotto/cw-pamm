@@ -26,6 +26,7 @@ pub fn exec_sell(
     let SellParams { amounts } = params;
     let quote_token = QUOTE_TOKEN.load(deps.storage)?;
     let quote_decimals = QUOTE_DECIMALS.load(deps.storage)?;
+    let fee_pct = SELL_FEE_PCT.load(deps.storage)?;
     let seller = info.sender;
 
     let mut total_in_amount = Uint128::zero();
@@ -70,6 +71,8 @@ pub fn exec_sell(
                     stats.quote_amount_out = add_u256(stats.quote_amount_out, out_amount)?;
                     stats.base_amount_in = add_u256(stats.base_amount_in, in_amount)?;
                     stats.num_sells = add_u32(stats.num_buys, 1)?;
+                    stats.fees_collected =
+                        add_u128(stats.fees_collected, mul_pct_u128(out_amount, fee_pct)?)?;
                     Ok(stats)
                 } else {
                     return Err(ContractError::NotAuthorized {
@@ -87,7 +90,6 @@ pub fn exec_sell(
         total_out_amount = add_u128(total_out_amount, out_amount)?;
     }
 
-    let fee_pct = SELL_FEE_PCT.load(deps.storage)?;
     let fee_amount = mul_pct_u128(total_out_amount, fee_pct)?;
     let total_out_amount_post_fee = sub_u128(total_out_amount, fee_amount)?;
 

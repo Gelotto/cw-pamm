@@ -32,6 +32,7 @@ impl Pool {
         Ok(POOLS.load(store, id)?)
     }
 
+    /// Buy trades quote tokens for buy-in to the pool.
     pub fn buy(
         &mut self,
         in_amount: Uint128,
@@ -39,6 +40,7 @@ impl Pool {
         self.swap(in_amount, true)
     }
 
+    /// Sell trades back pool buy-in for quote tokens.
     pub fn sell(
         &mut self,
         in_amount: Uint128,
@@ -46,6 +48,8 @@ impl Pool {
         self.swap(in_amount, false)
     }
 
+    /// Swap is for reapportioning buy-in between pools, distinct from "buy" and
+    /// "sell", which deal with swapping quote tokens in/out of the contract.
     pub fn swap(
         &mut self,
         in_amount: Uint128,
@@ -88,7 +92,7 @@ pub struct PoolInfo {
 }
 
 #[cw_serde]
-pub struct GlobalStats {
+pub struct MarketStats {
     pub amount_claimed: Uint128,
     pub num_traders: u32,
 }
