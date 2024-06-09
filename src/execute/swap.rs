@@ -2,7 +2,10 @@ use crate::{
     error::ContractError,
     math::{add_u256, add_u32, mul_ratio_u128, sub_u128},
     msg::SwapStats,
-    state::storage::{AMOUNT_CLAIMED, SWAP_STATS},
+    state::{
+        models::OhlcBar,
+        storage::{QUOTE_DECIMALS, SWAP_STATS},
+    },
 };
 use crate::{
     msg::SwapParams,
@@ -19,7 +22,7 @@ pub fn exec_swap(
     ctx: Context,
     params: SwapParams,
 ) -> Result<Response, ContractError> {
-    let Context { deps, info, .. } = ctx;
+    let Context { deps, info, env } = ctx;
     let SwapParams {
         from_amount,
         from_pool: from_pool_id,
@@ -30,6 +33,7 @@ pub fn exec_swap(
     let mut to_pool = Pool::load(deps.storage, to_pool_id)?;
 
     let quote_token = QUOTE_TOKEN.load(deps.storage)?;
+    let quote_decimals = QUOTE_DECIMALS.load(deps.storage)?;
     let quote_amount = from_pool.swap(from_amount, false)?;
 
     let fee_amount = mul_ratio_u128(
@@ -60,6 +64,22 @@ pub fn exec_swap(
             stats.n = add_u32(stats.n, 1)?;
             Ok(stats)
         },
+    )?;
+    // Update or add a historical trading OHLC "candlestick"
+    OhlcBar::upsert(
+        deps.storage,
+        from_pool_id,
+        env.block.time,
+        from_pool.calc_quote_price(quote_decimals)?,
+        from_amount,
+    )?;
+
+    OhlcBar::upsert(
+        deps.storage,
+        to_pool_id,
+        env.block.time,
+        to_pool.calc_quote_price(quote_decimals)?,
+        to_amount,
     )?;
 
     Ok(Response::new()

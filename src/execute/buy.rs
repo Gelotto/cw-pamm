@@ -3,14 +3,14 @@ use crate::{
     math::{add_u128, add_u256, add_u32, mul_pct_u128, sub_u128},
     msg::{BuyParams, PoolAmount},
     state::{
-        models::{Pool, PoolAccount, TraderInfo, TraderStats},
+        models::{OhlcBar, Pool, PoolAccount, TraderInfo, TraderStats},
         storage::{
-            BUY_FEE_PCT, FEE_MANAGER_ADDR, MARKET_STATS, POOLS, POOL_STATS, QUOTE_TOKEN,
-            TRADER_INFOS,
+            BUY_FEE_PCT, FEE_MANAGER_ADDR, MARKET_STATS, POOLS, POOL_STATS, QUOTE_DECIMALS,
+            QUOTE_TOKEN, TRADER_INFOS,
         },
     },
 };
-use cosmwasm_std::{attr, Coin, Response, Uint128};
+use cosmwasm_std::{attr, Response, Uint128};
 
 use super::Context;
 
@@ -18,9 +18,10 @@ pub fn exec_buy(
     ctx: Context,
     params: BuyParams,
 ) -> Result<Response, ContractError> {
-    let Context { deps, info, .. } = ctx;
+    let Context { deps, info, env } = ctx;
     let BuyParams { amounts } = params;
     let quote_token = QUOTE_TOKEN.load(deps.storage)?;
+    let quote_decimals = QUOTE_DECIMALS.load(deps.storage)?;
     let fee_pct = BUY_FEE_PCT.load(deps.storage)?;
     let buyer = info.sender;
 
@@ -69,6 +70,8 @@ pub fn exec_buy(
 
         POOLS.save(deps.storage, pool_id, &pool)?;
 
+        let price = pool.calc_quote_price(quote_decimals)?;
+
         // Update statistics pertaining specifically to this pool
         POOL_STATS.update(
             deps.storage,
@@ -89,6 +92,9 @@ pub fn exec_buy(
                 }
             },
         )?;
+
+        // Update or add a historical trading OHLC "candlestick"
+        OhlcBar::upsert(deps.storage, pool_id, env.block.time, price, out_amount)?;
 
         // Add submsg to transfer fee to fee manager account
         resp = resp.add_submessage(

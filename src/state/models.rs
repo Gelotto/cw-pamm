@@ -1,12 +1,11 @@
 use crate::{
     error::ContractError,
-    math::{add_u128, div_u256, sub_u128},
-    token::Token,
+    math::{add_u128, add_u32, div_u256, mul_ratio_u128, sub_u128},
 };
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Storage, Uint128, Uint256};
+use cosmwasm_std::{Addr, Storage, Timestamp, Uint128, Uint256, Uint64};
 
-use super::storage::{PoolId, POOLS, POOL_ACCOUNTS};
+use super::storage::{PoolId, POOLS, POOL_ACCOUNTS, POOL_OHLC_BARS};
 
 #[cw_serde]
 pub struct Config {}
@@ -66,6 +65,17 @@ impl Pool {
         self.reserves.base = new_base_reserve;
         self.reserves.quote = new_quote_reserve;
         Ok(out_amount)
+    }
+
+    pub fn calc_quote_price(
+        &self,
+        quote_decimals: u8,
+    ) -> Result<Uint128, ContractError> {
+        mul_ratio_u128(
+            self.reserves.quote,
+            10u128.pow(quote_decimals as u32),
+            self.reserves.base,
+        )
     }
 }
 
@@ -131,5 +141,64 @@ impl PoolAccount {
         )?;
 
         Ok(account)
+    }
+}
+
+#[cw_serde]
+pub struct OhlcBar {
+    pub o: Uint128,
+    pub c: Uint128,
+    pub h: Uint128,
+    pub l: Uint128,
+    pub v: Uint128,
+    pub t: Uint64,
+    pub n: u32,
+}
+
+impl OhlcBar {
+    pub fn new(t: Uint64) -> Self {
+        Self {
+            o: Uint128::zero(),
+            h: Uint128::zero(),
+            l: Uint128::zero(),
+            c: Uint128::zero(),
+            v: Uint128::zero(),
+            n: 0,
+            t,
+        }
+    }
+
+    pub fn upsert(
+        store: &mut dyn Storage,
+        pool_id: PoolId,
+        time: Timestamp,
+        price: Uint128,
+        amount: Uint128,
+    ) -> Result<OhlcBar, ContractError> {
+        let seconds = time.seconds();
+        let t = seconds - (seconds % 60);
+        POOL_OHLC_BARS.update(
+            store,
+            (pool_id, t),
+            |maybe_bar| -> Result<_, ContractError> {
+                let mut bar = maybe_bar.unwrap_or_else(|| OhlcBar::new(t.into()));
+                if bar.n > 0 {
+                    if price > bar.h {
+                        bar.h = price;
+                    }
+                    if price < bar.l {
+                        bar.l = price;
+                    }
+                } else {
+                    bar.o = price;
+                    bar.h = price;
+                    bar.l = price;
+                }
+                bar.c = price;
+                bar.v = add_u128(bar.v, amount)?;
+                bar.n = add_u32(bar.n, 1)?;
+                Ok(bar)
+            },
+        )
     }
 }

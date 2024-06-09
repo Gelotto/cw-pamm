@@ -1,4 +1,4 @@
-use cosmwasm_std::{StdError, Uint128};
+use cosmwasm_std::StdError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -6,8 +6,6 @@ pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
 
-    // REGION: Error types shared across pampit contracts
-    // -------------------------------------------------------------------
     #[error("InvalidReplyId: {id:?}")]
     InvalidReplyId { id: u64 },
 

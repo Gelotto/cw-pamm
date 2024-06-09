@@ -2,7 +2,10 @@ use crate::{
     error::ContractError,
     math::{add_u128, add_u32, mul_pct_u128, sub_u128},
     msg::{PoolAmount, SellParams},
-    state::storage::{POOL_ACCOUNTS, POOL_STATS, SELL_FEE_PCT},
+    state::{
+        models::OhlcBar,
+        storage::{POOL_ACCOUNTS, POOL_STATS, QUOTE_DECIMALS, SELL_FEE_PCT},
+    },
 };
 use crate::{
     math::add_u256,
@@ -19,9 +22,10 @@ pub fn exec_sell(
     ctx: Context,
     params: SellParams,
 ) -> Result<Response, ContractError> {
-    let Context { deps, info, .. } = ctx;
+    let Context { deps, info, env } = ctx;
     let SellParams { amounts } = params;
     let quote_token = QUOTE_TOKEN.load(deps.storage)?;
+    let quote_decimals = QUOTE_DECIMALS.load(deps.storage)?;
     let seller = info.sender;
 
     let mut total_in_amount = Uint128::zero();
@@ -74,6 +78,10 @@ pub fn exec_sell(
                 }
             },
         )?;
+
+        // Update or add a historical trading OHLC "candlestick"
+        let price = pool.calc_quote_price(quote_decimals)?;
+        OhlcBar::upsert(deps.storage, pool_id, env.block.time, price, out_amount)?;
 
         total_in_amount = add_u128(total_in_amount, in_amount)?;
         total_out_amount = add_u128(total_out_amount, out_amount)?;
