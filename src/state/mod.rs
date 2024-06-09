@@ -4,7 +4,7 @@ pub mod utils;
 
 use crate::{error::ContractError, math::mul_u256};
 use cosmwasm_std::{Response, Uint128, Uint256};
-use storage::{QUOTE_DECIMALS, QUOTE_SYMBOL, SELL_FEE_PCT};
+use storage::{OPERATOR_ADDR, QUOTE_DECIMALS, QUOTE_SYMBOL, SELL_FEE_PCT};
 
 use crate::{
     execute::Context,
@@ -32,6 +32,7 @@ pub fn init(
         quote_token,
         quote_decimals,
         quote_symbol,
+        operator,
         fees,
     } = msg;
 
@@ -44,6 +45,10 @@ pub fn init(
     SWAP_FEE_PCT.save(deps.storage, &fees.pct_swap)?;
     START_TIME.save(deps.storage, &start)?;
     STOP_TIME.save(deps.storage, stop)?;
+
+    if let Some(operator) = operator {
+        OPERATOR_ADDR.save(deps.storage, &deps.api.addr_validate(operator.as_str())?)?;
+    }
 
     MARKET_STATS.save(
         deps.storage,

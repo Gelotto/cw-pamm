@@ -5,6 +5,7 @@ use crate::{
     state::{
         models::OhlcBar,
         storage::{POOL_ACCOUNTS, POOL_STATS, QUOTE_DECIMALS, SELL_FEE_PCT},
+        utils::resolve_initiator,
     },
 };
 use crate::{
@@ -23,11 +24,11 @@ pub fn exec_sell(
     params: SellParams,
 ) -> Result<Response, ContractError> {
     let Context { deps, info, env } = ctx;
-    let SellParams { amounts } = params;
+    let SellParams { amounts, initiator } = params;
     let quote_token = QUOTE_TOKEN.load(deps.storage)?;
     let quote_decimals = QUOTE_DECIMALS.load(deps.storage)?;
     let fee_pct = SELL_FEE_PCT.load(deps.storage)?;
-    let seller = info.sender;
+    let seller = resolve_initiator(deps.storage, deps.api, &info.sender, initiator)?;
 
     let mut total_in_amount = Uint128::zero();
     let mut total_out_amount = Uint128::zero();

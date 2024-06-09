@@ -9,6 +9,7 @@ use super::models::{Config, MarketStats, OhlcBar, Pool, PoolAccount, PoolInfo, T
 pub type PoolId = u8;
 
 pub const CONFIG: Item<Config> = Item::new("config");
+pub const OPERATOR_ADDR: Item<Addr> = Item::new("operator_addr");
 pub const QUOTE_TOKEN: Item<Token> = Item::new("quote_token");
 pub const QUOTE_DECIMALS: Item<u8> = Item::new("quote_decimals");
 pub const QUOTE_SYMBOL: Item<String> = Item::new("quote_symbol");

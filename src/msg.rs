@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Timestamp, Uint128, Uint256};
 
@@ -28,6 +30,7 @@ pub struct FeeInitArgs {
 
 #[cw_serde]
 pub struct InstantiateMsg {
+    pub operator: Option<Addr>,
     pub start: Timestamp,
     pub stop: Timestamp,
     pub quote_token: Token,
@@ -57,6 +60,7 @@ pub struct MigrateMsg {}
 
 #[cw_serde]
 pub struct SwapParams {
+    pub initiator: Option<Addr>,
     pub to_pool: PoolId,
     pub from_pool: PoolId,
     pub from_amount: Uint128,
@@ -70,11 +74,13 @@ pub struct PoolAmount {
 
 #[cw_serde]
 pub struct SellParams {
+    pub initiator: Option<Addr>,
     pub amounts: Vec<PoolAmount>,
 }
 
 #[cw_serde]
 pub struct BuyParams {
+    pub initiator: Option<Addr>,
     pub amounts: Vec<PoolAmount>,
 }
 

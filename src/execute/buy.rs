@@ -8,6 +8,7 @@ use crate::{
             BUY_FEE_PCT, FEE_MANAGER_ADDR, MARKET_STATS, POOLS, POOL_STATS, QUOTE_DECIMALS,
             QUOTE_TOKEN, TRADER_INFOS,
         },
+        utils::resolve_initiator,
     },
 };
 use cosmwasm_std::{attr, Response, Uint128};
@@ -19,11 +20,11 @@ pub fn exec_buy(
     params: BuyParams,
 ) -> Result<Response, ContractError> {
     let Context { deps, info, env } = ctx;
-    let BuyParams { amounts } = params;
+    let BuyParams { amounts, initiator } = params;
     let quote_token = QUOTE_TOKEN.load(deps.storage)?;
     let quote_decimals = QUOTE_DECIMALS.load(deps.storage)?;
     let fee_pct = BUY_FEE_PCT.load(deps.storage)?;
-    let buyer = info.sender;
+    let buyer = resolve_initiator(deps.storage, deps.api, &info.sender, initiator)?;
 
     // Total quote amount swapping in
     let total_in_amount: Uint128 = amounts

@@ -1,10 +1,11 @@
 use crate::{
     error::ContractError,
-    math::{add_u128, add_u256, add_u32, mul_ratio_u128, sub_u128},
+    math::{add_u128, add_u256, add_u32, mul_pct_u128, sub_u128},
     msg::SwapStats,
     state::{
         models::OhlcBar,
         storage::{POOL_STATS, QUOTE_DECIMALS, SWAP_STATS},
+        utils::resolve_initiator,
     },
 };
 use crate::{
@@ -27,7 +28,10 @@ pub fn exec_swap(
         from_amount,
         from_pool: from_pool_id,
         to_pool: to_pool_id,
+        initiator,
     } = params;
+
+    let initiator = resolve_initiator(deps.storage, deps.api, &info.sender, initiator)?;
 
     let mut from_pool = Pool::load(deps.storage, from_pool_id)?;
     let mut to_pool = Pool::load(deps.storage, to_pool_id)?;
@@ -36,16 +40,11 @@ pub fn exec_swap(
     let quote_decimals = QUOTE_DECIMALS.load(deps.storage)?;
     let quote_amount = from_pool.swap(from_amount, false)?;
 
-    let fee_amount = mul_ratio_u128(
-        quote_amount,
-        SWAP_FEE_PCT.load(deps.storage)?,
-        1_000_000u128,
-    )?;
-
+    let fee_amount = mul_pct_u128(quote_amount, SWAP_FEE_PCT.load(deps.storage)?)?;
     let to_amount = to_pool.swap(sub_u128(quote_amount, fee_amount)?, true)?;
 
-    PoolAccount::upsert(deps.storage, &info.sender, from_pool_id, from_amount, false)?;
-    PoolAccount::upsert(deps.storage, &info.sender, to_pool_id, to_amount, true)?;
+    PoolAccount::upsert(deps.storage, &initiator, from_pool_id, from_amount, false)?;
+    PoolAccount::upsert(deps.storage, &initiator, to_pool_id, to_amount, true)?;
 
     POOLS.save(deps.storage, from_pool_id, &from_pool)?;
     POOLS.save(deps.storage, to_pool_id, &to_pool)?;
